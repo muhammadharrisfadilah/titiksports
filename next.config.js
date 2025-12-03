@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // ⚡ Cloudflare Pages Optimization
-  output: 'export',
+  // output: 'export', // serahkan pada @cloudflare/next-on-pages
   images: {
     unoptimized: true,
     remotePatterns: [
