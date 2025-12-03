@@ -15,16 +15,17 @@
     "clsx": "^2.1.1",
     "dashjs": "^5.1.0",
     "hls.js": "^1.6.15",
-    "next": "16.0.6",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
+    "next": "15.5.2",
+    "react": "^18",
+    "react-dom": "^18",
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
+    "@cloudflare/next-on-pages": "^1.13.16",
     "@tailwindcss/postcss": "^4",
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
-    "eslint-config-next": "16.0.6",
+    "eslint-config-next": "15.5.2",
     "tailwindcss": "^4"
   }
 }

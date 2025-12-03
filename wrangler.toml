@@ -1,5 +1,4 @@
 name = "titikbola-production"
-# UBAH BARIS INI KE .next
-pages_build_output_dir = ".next" 
+pages_build_output_dir = ".vercel/output/static"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
