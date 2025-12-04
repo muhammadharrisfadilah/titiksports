@@ -12,8 +12,8 @@ const nextConfig = {
     ],
   },
   
-  // 🔧 React Compiler
-  reactCompiler: true,
+  // 🔧 React Compiler (Temporarily disabled due to config validation)
+  // reactCompiler: true,
 
   // 🛑 FIX TURBOPACK
   turbopack: {
