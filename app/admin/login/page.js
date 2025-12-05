@@ -17,29 +17,69 @@ export default function AdminLoginPage() {
     setError('');
     setLoading(true);
 
+    const maxRetries = 3;
+    let lastError = null;
+
     try {
-      const response = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`🔐 Login attempt ${attempt}/${maxRetries}:`, { username });
 
-      const data = await response.json();
+          const response = await fetch('/api/auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+            credentials: 'include', // Include cookies
+          });
 
-      if (!response.ok || !data.success) {
-        setError(data.error || 'Login gagal. Coba lagi.');
-        console.error('Login response:', data);
-        return;
+          console.log(`📡 Auth response (attempt ${attempt}):`, { status: response.status, ok: response.ok });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            lastError = data.error || `Login failed: ${response.status}`;
+            console.error(`❌ Login error (attempt ${attempt}):`, lastError);
+            
+            if (attempt < maxRetries) {
+              // Wait before retrying
+              await new Promise(r => setTimeout(r, 500 * attempt));
+              continue;
+            }
+            
+            setError(lastError);
+            return;
+          }
+
+          if (!data.success) {
+            setError(data.error || 'Login gagal. Coba lagi.');
+            return;
+          }
+
+          console.log(`✅ Login successful on attempt ${attempt}`);
+          
+          // Save token using auth utility
+          await setAuthToken(data.token);
+          console.log('💾 Token saved to localStorage');
+          
+          // Redirect to dashboard
+          console.log('🔄 Redirecting to dashboard...');
+          router.push('/admin/dashboard');
+          return; // Exit on success
+          
+        } catch (err) {
+          lastError = err;
+          console.error(`⚠️ Fetch error (attempt ${attempt}):`, err.message);
+          
+          if (attempt < maxRetries) {
+            // Wait before retrying
+            await new Promise(r => setTimeout(r, 500 * attempt));
+          }
+        }
       }
 
-      // Save token using auth utility
-      await setAuthToken(data.token);
-      
-      // Redirect to dashboard
-      router.push('/admin/dashboard');
-    } catch (err) {
-      console.error('Login error:', err);
-      setError('Terjadi kesalahan server. Coba lagi.');
+      // All retries failed
+      console.error('❌ Login failed after all retries:', lastError);
+      setError('Koneksi ke server gagal. Pastikan server berjalan dan coba lagi.');
     } finally {
       setLoading(false);
     }
