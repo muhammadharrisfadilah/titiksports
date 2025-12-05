@@ -102,6 +102,7 @@ export async function POST(request) {
     }
 
     const body = await request.json();
+    console.log('📝 POST /api/matches - body:', { home_team: body.home_team, away_team: body.away_team });
 
     // Comprehensive validation
     if (!body.home_team || !body.away_team) {
@@ -125,6 +126,8 @@ export async function POST(request) {
       status: ['live', 'upcoming', 'ended'].includes(body.status) ? body.status : 'upcoming',
     };
 
+    console.log('🔍 Sanitized body:', sanitizedBody);
+
     // Validate stream URLs format
     for (const key of ['stream_url1', 'stream_url2', 'stream_url3']) {
       if (sanitizedBody[key]) {
@@ -139,7 +142,9 @@ export async function POST(request) {
       }
     }
 
+    console.log('💾 Calling createMatch...');
     const result = await createMatch(sanitizedBody);
+    console.log('✅ createMatch result:', result);
 
     if (!result.success) {
       return NextResponse.json(
@@ -157,7 +162,7 @@ export async function POST(request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('POST matches error:', error);
+    console.error('❌ POST matches error:', error);
     return NextResponse.json(
       {
         success: false,

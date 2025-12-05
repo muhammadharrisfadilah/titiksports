@@ -50,12 +50,18 @@ export default function MatchFormModal({ match, onClose }) {
       const url = isEdit ? `/api/matches?id=${match.id}` : '/api/matches';
       const method = isEdit ? 'PUT' : 'POST';
 
+      console.log(`📤 Submitting ${method} to ${url}:`, formData);
+
       const response = await fetchWithAuth(url, {
         method,
         body: JSON.stringify(formData),
       });
 
+      console.log(`📥 Response status:`, response.status, response.ok);
+
       const result = await response.json();
+      
+      console.log(`📦 Response body:`, result);
 
       if (!response.ok || !result.success) {
         setError(result.error || 'Gagal menyimpan data');
@@ -66,7 +72,7 @@ export default function MatchFormModal({ match, onClose }) {
       alert(isEdit ? 'Pertandingan berhasil diupdate!' : 'Pertandingan berhasil ditambahkan!');
       onClose(true); // Reload data
     } catch (err) {
-      console.error('Submit error:', err);
+      console.error('❌ Submit error:', err);
       setError(err.message || 'Terjadi kesalahan');
     } finally {
       setLoading(false);
