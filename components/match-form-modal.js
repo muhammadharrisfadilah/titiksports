@@ -59,13 +59,30 @@ export default function MatchFormModal({ match, onClose }) {
 
       console.log(`📥 Response status:`, response.status, response.ok);
 
-      const result = await response.json();
-      
-      console.log(`📦 Response body:`, result);
+      // Defensive parsing: try JSON, fall back to text
+      let result;
+      try {
+        result = await response.json();
+      } catch (jsonErr) {
+        try {
+          const txt = await response.text();
+          result = { success: false, error: txt };
+        } catch (txtErr) {
+          result = { success: false, error: 'Unable to parse response' };
+        }
+      }
+
+      // Stable log: stringify so console shows final value instead of live object
+      try {
+        console.log(`📦 Response body:`, JSON.parse(JSON.stringify(result)));
+      } catch (e) {
+        console.log('📦 Response body (raw):', String(result));
+      }
 
       if (!response.ok || !result.success) {
-        setError(result.error || 'Gagal menyimpan data');
-        console.error('API Error:', { status: response.status, result });
+        const message = result?.error || `Gagal menyimpan data (status ${response.status})`;
+        setError(message);
+        console.error('API Error:', { status: response.status, result: JSON.parse(JSON.stringify(result || {})) });
         return;
       }
 
