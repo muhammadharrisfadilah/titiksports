@@ -15,18 +15,23 @@ export default function AdminDashboard() {
   const [editMatch, setEditMatch] = useState(null);
 
   useEffect(() => {
-    // Check authentication via API
+    // Check authentication - just verify token exists and is valid
     const checkAuth = async () => {
-      const isAuthenticated = await verifyToken();
-      
-      if (!isAuthenticated) {
-        clearAuthToken();
-        router.push('/admin/login');
-        return;
-      }
+      try {
+        const token = await getAuthToken();
+        
+        if (!token) {
+          console.log('❌ No token found, redirecting to login');
+          router.push('/admin/login');
+          return;
+        }
 
-      // Token valid, load matches
-      loadMatches();
+        console.log('✅ Token found, loading matches...');
+        loadMatches();
+      } catch (err) {
+        console.error('Auth check error:', err);
+        router.push('/admin/login');
+      }
     };
 
     checkAuth();

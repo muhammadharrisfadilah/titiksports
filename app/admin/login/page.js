@@ -23,7 +23,7 @@ export default function AdminLoginPage() {
     try {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          console.log(`🔐 Login attempt ${attempt}/${maxRetries}:`, { username });
+          console.log(`🔐 Login attempt ${attempt}/${maxRetries}: ${username}`);
 
           const response = await fetch('/api/auth', {
             method: 'POST',
@@ -32,16 +32,14 @@ export default function AdminLoginPage() {
             credentials: 'include', // Include cookies
           });
 
-          console.log(`📡 Auth response (attempt ${attempt}):`, { status: response.status, ok: response.ok });
-
           const data = await response.json();
+          console.log(`📡 Response (attempt ${attempt}):`, { status: response.status, success: data.success });
 
           if (!response.ok) {
-            lastError = data.error || `Login failed: ${response.status}`;
-            console.error(`❌ Login error (attempt ${attempt}):`, lastError);
+            lastError = data.error || `Login failed (${response.status})`;
             
             if (attempt < maxRetries) {
-              // Wait before retrying
+              console.warn(`⚠️ Retry ${attempt}...`);
               await new Promise(r => setTimeout(r, 500 * attempt));
               continue;
             }
@@ -55,31 +53,30 @@ export default function AdminLoginPage() {
             return;
           }
 
-          console.log(`✅ Login successful on attempt ${attempt}`);
+          console.log(`✅ Login successful!`);
           
-          // Save token using auth utility
+          // Save token
           await setAuthToken(data.token);
-          console.log('💾 Token saved to localStorage');
+          console.log(`💾 Token saved`);
           
           // Redirect to dashboard
-          console.log('🔄 Redirecting to dashboard...');
+          console.log(`🔄 Redirecting to dashboard...`);
+          await new Promise(r => setTimeout(r, 500)); // Small delay to ensure token is saved
           router.push('/admin/dashboard');
-          return; // Exit on success
+          return;
           
         } catch (err) {
           lastError = err;
-          console.error(`⚠️ Fetch error (attempt ${attempt}):`, err.message);
+          console.error(`❌ Fetch error (attempt ${attempt}):`, err.message);
           
           if (attempt < maxRetries) {
-            // Wait before retrying
             await new Promise(r => setTimeout(r, 500 * attempt));
           }
         }
       }
 
       // All retries failed
-      console.error('❌ Login failed after all retries:', lastError);
-      setError('Koneksi ke server gagal. Pastikan server berjalan dan coba lagi.');
+      setError('Tidak dapat terhubung ke server. Pastikan server berjalan.');
     } finally {
       setLoading(false);
     }

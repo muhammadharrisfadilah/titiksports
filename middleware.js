@@ -14,7 +14,15 @@ export function middleware(request) {
 
   // Protect admin routes
   if (pathname.startsWith('/admin')) {
-    const token = request.cookies.get('adminToken')?.value;
+    let token = request.cookies.get('adminToken')?.value;
+    
+    // Also check Authorization header (for fetch requests)
+    if (!token) {
+      const authHeader = request.headers.get('authorization');
+      if (authHeader?.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+      }
+    }
 
     if (!token) {
       // Redirect ke login jika tidak ada token
