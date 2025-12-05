@@ -1,4 +1,11 @@
 name = "titikbola-production"
-pages_build_output_dir = ".vercel/output/static"
-compatibility_date = "2025-01-01"
+compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
+
+# Cloudflare Pages configuration
+build = { command = "npm run build" }
+
+# Route configuration
+routes = [
+  { pattern = "^/api/.*", zone_name = "example.com" }
+]
