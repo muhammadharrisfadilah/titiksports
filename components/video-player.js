@@ -18,6 +18,7 @@ export default function VideoPlayer({ match }) {
   const retryCountRef = useRef(0);
   const stallRetryCountRef = useRef(0);
   const isRecoveringRef = useRef(false);
+  const isInitializingRef = useRef(false);
   const lastErrorTimeRef = useRef(0);
   
   const MAX_RETRIES = 5;
@@ -81,6 +82,11 @@ export default function VideoPlayer({ match }) {
     
     tokenRefreshTimerRef.current = setInterval(() => {
       console.log('🔄 Auto token refresh triggered');
+      // avoid overlapping initializations
+      if (isInitializingRef.current) {
+        console.log('Init already running, skipping token refresh');
+        return;
+      }
       initPlayer(currentLink, true);
     }, TOKEN_REFRESH_INTERVAL);
   }, [currentLink]);
@@ -449,6 +455,12 @@ export default function VideoPlayer({ match }) {
 
   // Main player initialization
   const initPlayer = async (linkId, isRefresh = false) => {
+    // prevent overlapping initializations
+    if (isInitializingRef.current) {
+      console.log('initPlayer: already initializing, skipping call');
+      return;
+    }
+    isInitializingRef.current = true;
     setLoading(true);
     setError(null);
     
@@ -494,6 +506,8 @@ export default function VideoPlayer({ match }) {
       if (!isRefresh) {
         tryAlternativeLink();
       }
+    } finally {
+      isInitializingRef.current = false;
     }
   };
 

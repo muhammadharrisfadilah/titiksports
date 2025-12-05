@@ -13,12 +13,30 @@ async function verifyAdmin(request) {
       return { authenticated: false, error: 'No token provided' };
     }
 
-    // Simple token validation
-    const decoded = Buffer.from(token, 'base64').toString('utf-8');
-    const [username, timestamp] = decoded.split(':');
-    const age = Date.now() - parseInt(timestamp);
+    // Expect token format: base64(username:timestamp) or signed tokens in future
+    let decoded;
+    try {
+      // Buffer may not exist in some runtimes (Edge), but Node supports it.
+      if (typeof Buffer !== 'undefined') {
+        decoded = Buffer.from(token, 'base64').toString('utf-8');
+      } else if (typeof atob === 'function') {
+        decoded = atob(token);
+      } else {
+        return { authenticated: false, error: 'Runtime not supported for token decoding' };
+      }
+    } catch (e) {
+      return { authenticated: false, error: 'Invalid token encoding' };
+    }
 
-    if (age >= 7200000) { // 2 hours
+    const parts = decoded.split(':');
+    if (parts.length < 2) return { authenticated: false, error: 'Invalid token format' };
+
+    const username = parts[0];
+    const timestamp = parseInt(parts[1], 10);
+    if (!Number.isFinite(timestamp)) return { authenticated: false, error: 'Invalid token timestamp' };
+
+    const age = Date.now() - timestamp;
+    if (age >= 7200000 || age < -60000) { // 2 hours, allow small clock skew
       return { authenticated: false, error: 'Token expired' };
     }
 
