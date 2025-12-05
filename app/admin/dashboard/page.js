@@ -11,6 +11,7 @@ export default function AdminDashboard() {
   const router = useRouter();
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [editMatch, setEditMatch] = useState(null);
 
@@ -30,6 +31,7 @@ export default function AdminDashboard() {
         loadMatches();
       } catch (err) {
         console.error('Auth check error:', err);
+        setError('Auth error: ' + err.message);
         router.push('/admin/login');
       }
     };
@@ -38,10 +40,20 @@ export default function AdminDashboard() {
   }, [router]);
 
   const loadMatches = async () => {
-    setLoading(true);
-    const data = await getMatches();
-    setMatches(data);
-    setLoading(false);
+    try {
+      setLoading(true);
+      setError(null);
+      console.log('📊 Fetching matches from Supabase...');
+      const data = await getMatches();
+      console.log('📊 Matches loaded:', data?.length || 0);
+      setMatches(data || []);
+    } catch (err) {
+      console.error('❌ Error loading matches:', err);
+      setError('Gagal memuat pertandingan: ' + err.message);
+      setMatches([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEdit = (match) => {
@@ -89,7 +101,30 @@ export default function AdminDashboard() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-netflix-black">
-        <div className="w-16 h-16 border-4 border-white/20 border-t-netflix-red rounded-full animate-spin" />
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-white/20 border-t-netflix-red rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-400">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-netflix-black">
+        <div className="text-center max-w-md p-8 bg-netflix-darkGray rounded-lg border border-netflix-red/30">
+          <h2 className="text-xl font-bold text-netflix-red mb-4">Error</h2>
+          <p className="text-gray-300 mb-6">{error}</p>
+          <button 
+            onClick={() => {
+              setError(null);
+              loadMatches();
+            }}
+            className="btn btn-primary"
+          >
+            🔄 Try Again
+          </button>
+        </div>
       </div>
     );
   }
