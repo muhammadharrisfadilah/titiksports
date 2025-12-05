@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getMatches, deleteMatch } from '@/lib/supabase';
+import { getMatches } from '@/lib/supabase';
+import { verifyToken, getAuthToken, clearAuthToken, fetchWithAuth } from '@/lib/auth-client';
 import MatchFormModal from '@/components/match-form-modal';
 
 export default function AdminDashboard() {
@@ -14,14 +15,21 @@ export default function AdminDashboard() {
   const [editMatch, setEditMatch] = useState(null);
 
   useEffect(() => {
-    // Check authentication
-    const token = localStorage.getItem('adminToken');
-    if (!token) {
-      router.push('/admin/login');
-      return;
-    }
+    // Check authentication via API
+    const checkAuth = async () => {
+      const isAuthenticated = await verifyToken();
+      
+      if (!isAuthenticated) {
+        clearAuthToken();
+        router.push('/admin/login');
+        return;
+      }
 
-    loadMatches();
+      // Token valid, load matches
+      loadMatches();
+    };
+
+    checkAuth();
   }, [router]);
 
   const loadMatches = async () => {
@@ -39,17 +47,29 @@ export default function AdminDashboard() {
   const handleDelete = async (id) => {
     if (!confirm('Yakin ingin menghapus pertandingan ini?')) return;
 
-    const result = await deleteMatch(id);
-    if (result.success) {
+    try {
+      const response = await fetchWithAuth(`/api/matches?id=${id}`, {
+        method: 'DELETE',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        alert('Gagal menghapus: ' + (result.error || 'Unknown error'));
+        console.error('Delete error:', result);
+        return;
+      }
+
       alert('Pertandingan berhasil dihapus!');
       loadMatches();
-    } else {
-      alert('Gagal menghapus: ' + result.error);
+    } catch (err) {
+      console.error('Delete error:', err);
+      alert('Terjadi kesalahan: ' + err.message);
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('adminToken');
+  const handleLogout = async () => {
+    clearAuthToken();
     router.push('/admin/login');
   };
 

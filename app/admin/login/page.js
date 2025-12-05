@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { setAuthToken } from '@/lib/auth-client';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -17,22 +18,28 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      // Simple client-side auth (matching worker logic)
-      const adminUsername = process.env.NEXT_PUBLIC_ADMIN_USERNAME || 'admin';
-      const adminPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || '123';
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
 
-      if (username === adminUsername && password === adminPassword) {
-        // Create token and save to localStorage
-        const token = btoa(`${username}:${password}:${Date.now()}`);
-        localStorage.setItem('adminToken', token);
-        
-        // Redirect to dashboard
-        router.push('/admin/dashboard');
-      } else {
-        setError('Username atau password salah');
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setError(data.error || 'Login gagal. Coba lagi.');
+        console.error('Login response:', data);
+        return;
       }
+
+      // Save token using auth utility
+      await setAuthToken(data.token);
+      
+      // Redirect to dashboard
+      router.push('/admin/dashboard');
     } catch (err) {
-      setError('Terjadi kesalahan. Coba lagi.');
+      console.error('Login error:', err);
+      setError('Terjadi kesalahan server. Coba lagi.');
     } finally {
       setLoading(false);
     }

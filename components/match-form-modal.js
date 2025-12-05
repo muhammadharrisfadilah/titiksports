@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { createMatch, updateMatch } from '@/lib/supabase';
+import { fetchWithAuth } from '@/lib/auth-client';
 
 export default function MatchFormModal({ match, onClose }) {
   const isEdit = !!match;
@@ -46,17 +46,27 @@ export default function MatchFormModal({ match, onClose }) {
     setError('');
 
     try {
-      const result = isEdit
-        ? await updateMatch(match.id, formData)
-        : await createMatch(formData);
+      // Make API request with auth token
+      const url = isEdit ? `/api/matches?id=${match.id}` : '/api/matches';
+      const method = isEdit ? 'PUT' : 'POST';
 
-      if (result.success) {
-        alert(isEdit ? 'Pertandingan berhasil diupdate!' : 'Pertandingan berhasil ditambahkan!');
-        onClose(true); // Reload data
-      } else {
+      const response = await fetchWithAuth(url, {
+        method,
+        body: JSON.stringify(formData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
         setError(result.error || 'Gagal menyimpan data');
+        console.error('API Error:', { status: response.status, result });
+        return;
       }
+
+      alert(isEdit ? 'Pertandingan berhasil diupdate!' : 'Pertandingan berhasil ditambahkan!');
+      onClose(true); // Reload data
     } catch (err) {
+      console.error('Submit error:', err);
       setError(err.message || 'Terjadi kesalahan');
     } finally {
       setLoading(false);
