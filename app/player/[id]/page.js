@@ -3,6 +3,7 @@ import { getMatchById, getMatches } from '@/lib/supabase';
 import VideoPlayer from '@/components/video-player';
 import AdBanner from '@/components/ad-banner';
 import Link from 'next/link';
+import P2PStatus from '@/components/p2p-status';
 
 export const revalidate = 10;
 
@@ -92,7 +93,12 @@ export default async function PlayerPage({ params }) {
       {/* Video Player Container */}
       <div className="container-custom py-8">
         {canStream ? (
-          <VideoPlayer match={match} />
+          <>
+            <VideoPlayer match={match} />
+            <div className="mt-6">
+              <P2PStatus />
+            </div>
+          </>
         ) : (
           <div className="video-container">
             <div className="overlay">
