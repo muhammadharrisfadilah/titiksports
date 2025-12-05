@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // ⚡ Cloudflare Pages Optimization
-  // output: 'export', // serahkan pada @cloudflare/next-on-pages
+  output: 'standalone', // Optimized untuk Cloudflare Pages
   images: {
     unoptimized: true,
     remotePatterns: [
@@ -9,23 +9,15 @@ const nextConfig = {
         protocol: 'https',
         hostname: '**',
       },
+      {
+        protocol: 'http',
+        hostname: '**',
+      },
     ],
   },
-  
-  // 🔧 React Compiler (Temporarily disabled due to config validation)
-  // reactCompiler: true,
 
-  // 🛑 FIX TURBOPACK
-  turbopack: {
-    // Optional: add specific turbopack configurations here if needed
-  },
-
-  // ✅ Allowed development origins to prevent cross-origin errors
-  allowedDevOrigins: [
-    'http://localhost:3000',
-    'http://192.168.1.2:3000', // Your local network IP
-    // Add other local IPs if you access from different devices
-  ],
+  // 🔧 React Compiler (untuk optimasi performa)
+  // reactCompiler: false, // Tidak support di Next.js 15.5
 
   // 🌐 Environment variables
   env: {
@@ -37,7 +29,7 @@ const nextConfig = {
     NEXT_PUBLIC_ADMIN_PASSWORD: process.env.NEXT_PUBLIC_ADMIN_PASSWORD || '123',
   },
 
-  // 📝 Webpack config fallback
+  // 📝 Webpack config untuk browser polyfills
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
@@ -46,13 +38,49 @@ const nextConfig = {
         net: false,
         tls: false,
         crypto: false,
+        path: false,
+        os: false,
       };
     }
     return config;
   },
 
+  // 🔒 Security headers
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN',
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+        ],
+      },
+    ];
+  },
+
+  // 🚀 Performance & Compression
   compress: true,
   poweredByHeader: false,
+  productionBrowserSourceMaps: false,
+
+  // 📱 Experimental features (optional)
+  experimental: {
+    optimizePackageImports: ['react', 'react-dom'],
+  },
 };
 
 module.exports = nextConfig;

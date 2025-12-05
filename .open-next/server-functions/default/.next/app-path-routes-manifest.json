@@ -1,0 +1,11 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/api/auth/route": "/api/auth",
+  "/api/matches/route": "/api/matches",
+  "/api/p2p-signal/route": "/api/p2p-signal",
+  "/favicon.ico/route": "/favicon.ico",
+  "/admin/dashboard/page": "/admin/dashboard",
+  "/admin/login/page": "/admin/login",
+  "/player/[id]/page": "/player/[id]",
+  "/page": "/"
+}
