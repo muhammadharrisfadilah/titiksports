@@ -1,6 +1,23 @@
 import { NextResponse } from 'next/server';
 import { createMatch, getMatches, updateMatch, deleteMatch, getMatchById } from '@/lib/supabase';
 
+// Utility to sanitize stream URLs
+function sanitizeStreamUrl(url) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    // Only allow http and https
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+    // Reject private IPs
+    const hostname = parsed.hostname.toLowerCase();
+    if (['localhost', '127.0.0.1', '::1'].includes(hostname)) return null;
+    if (hostname.startsWith('10.') || hostname.startsWith('192.168.') || hostname.startsWith('172.')) return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 // Middleware untuk verify admin token
 async function verifyAdmin(request) {
   try {
@@ -86,7 +103,7 @@ export async function POST(request) {
 
     const body = await request.json();
 
-    // Validate required fields
+    // Comprehensive validation
     if (!body.home_team || !body.away_team) {
       return NextResponse.json(
         {
@@ -97,7 +114,32 @@ export async function POST(request) {
       );
     }
 
-    const result = await createMatch(body);
+    // Sanitize input
+    const sanitizedBody = {
+      home_team: String(body.home_team || '').trim().slice(0, 255),
+      away_team: String(body.away_team || '').trim().slice(0, 255),
+      start_time: body.start_time ? new Date(body.start_time).toISOString() : null,
+      stream_url1: body.stream_url1 ? sanitizeStreamUrl(body.stream_url1) : null,
+      stream_url2: body.stream_url2 ? sanitizeStreamUrl(body.stream_url2) : null,
+      stream_url3: body.stream_url3 ? sanitizeStreamUrl(body.stream_url3) : null,
+      status: ['live', 'upcoming', 'ended'].includes(body.status) ? body.status : 'upcoming',
+    };
+
+    // Validate stream URLs format
+    for (const key of ['stream_url1', 'stream_url2', 'stream_url3']) {
+      if (sanitizedBody[key]) {
+        try {
+          new URL(sanitizedBody[key]);
+        } catch (e) {
+          return NextResponse.json(
+            { success: false, error: `Invalid URL format for ${key}` },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    const result = await createMatch(sanitizedBody);
 
     if (!result.success) {
       return NextResponse.json(

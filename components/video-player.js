@@ -609,6 +609,109 @@ export default function VideoPlayer({ match }) {
     return () => clearInterval(interval);
   }, [showStats]);
 
+  // Keyboard shortcuts handler
+  useEffect(() => {
+    const handleKeydown = (e) => {
+      if (!videoRef.current) return;
+      const video = videoRef.current;
+
+      switch (e.key.toLowerCase()) {
+        case ' ':
+          e.preventDefault();
+          if (video.paused) {
+            video.play().catch(() => {});
+          } else {
+            video.pause();
+          }
+          break;
+
+        case 'f':
+          e.preventDefault();
+          if (!document.fullscreenElement) {
+            videoRef.current?.requestFullscreen?.().catch(() => {});
+          } else {
+            document.exitFullscreen?.().catch(() => {});
+          }
+          break;
+
+        case 'm':
+          e.preventDefault();
+          video.muted = !video.muted;
+          break;
+
+        case 's':
+          e.preventDefault();
+          setShowStats(!showStats);
+          break;
+
+        case 'arrowleft':
+          e.preventDefault();
+          video.currentTime = Math.max(0, video.currentTime - 5);
+          break;
+
+        case 'arrowright':
+          e.preventDefault();
+          video.currentTime = Math.min(video.duration, video.currentTime + 5);
+          break;
+
+        case 'arrowup':
+          e.preventDefault();
+          video.volume = Math.min(1, video.volume + 0.1);
+          break;
+
+        case 'arrowdown':
+          e.preventDefault();
+          video.volume = Math.max(0, video.volume - 0.1);
+          break;
+
+        case '1':
+        case '2':
+        case '3':
+          e.preventDefault();
+          const linkIndex = parseInt(e.key) - 1;
+          if (availableLinks[linkIndex]) {
+            setCurrentLink(availableLinks[linkIndex].id);
+          }
+          break;
+
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
+  }, [showStats, availableLinks]);
+
+  // Network state monitoring
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log('✅ Network reconnected');
+      if (error?.includes('network') || error?.includes('offline')) {
+        setError(null);
+        // Auto-retry after network recovery
+        if (availableLinks.length > 0) {
+          setTimeout(() => {
+            initPlayer(currentLink);
+          }, 1000);
+        }
+      }
+    };
+
+    const handleOffline = () => {
+      console.log('❌ Network disconnected');
+      setError('Koneksi internet terputus. Tunggu sampai terhubung kembali...');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [error, currentLink, availableLinks]);
+
   // Initialize on mount
   useEffect(() => {
     if (availableLinks.length > 0) {

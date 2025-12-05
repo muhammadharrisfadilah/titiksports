@@ -45,10 +45,17 @@ export async function POST(request) {
       );
     }
 
-    // Generate token (HMAC-like token)
+    // Generate token with HMAC-SHA256
+    const crypto = require('crypto');
     const timestamp = Date.now();
-    const tokenData = `${username}:${timestamp}:${TOKEN_SECRET}`;
-    const token = Buffer.from(tokenData).toString('base64');
+    const tokenData = `${username}:${timestamp}`;
+    
+    // Generate HMAC-SHA256
+    const hmac = crypto.createHmac('sha256', TOKEN_SECRET);
+    hmac.update(tokenData);
+    const signature = hmac.digest('hex');
+    
+    const token = Buffer.from(`${tokenData}:${signature}`).toString('base64');
 
     // Set secure httpOnly cookie
     const response = NextResponse.json({
@@ -95,24 +102,34 @@ export async function GET(request) {
       );
     }
 
-    // Decode and verify token
+    // Decode and verify token with HMAC-SHA256
     try {
+      const crypto = require('crypto');
       const decoded = Buffer.from(token, 'base64').toString('utf-8');
-      const [username, timestamp, secret] = decoded.split(':');
+      const [tokenUsername, tokenTimestamp, tokenSignature] = decoded.split(':');
+      
+      if (!tokenUsername || !tokenTimestamp || !tokenSignature) {
+        return NextResponse.json({ authenticated: false }, { status: 401 });
+      }
 
-      // Simple token validation
-      if (username === ADMIN_USERNAME && secret === TOKEN_SECRET) {
-        const age = Date.now() - parseInt(timestamp);
-        if (age < 7200000) { // 2 hours
+      // Verify HMAC
+      const expectedHmac = crypto.createHmac('sha256', TOKEN_SECRET);
+      expectedHmac.update(`${tokenUsername}:${tokenTimestamp}`);
+      const expectedSignature = expectedHmac.digest('hex');
+      
+      // Constant-time comparison
+      if (crypto.timingSafeEqual(Buffer.from(tokenSignature), Buffer.from(expectedSignature))) {
+        const age = Date.now() - parseInt(tokenTimestamp);
+        if (age >= 0 && age < 7200000) { // 2 hours, allow no skew
           return NextResponse.json({
             authenticated: true,
-            username,
+            username: tokenUsername,
             expiresIn: Math.round((7200000 - age) / 1000),
           });
         }
       }
     } catch (e) {
-      // Token decode failed
+      console.warn('Token verification error:', e.message);
     }
 
     return NextResponse.json(
