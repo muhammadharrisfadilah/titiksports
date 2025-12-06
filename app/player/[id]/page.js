@@ -1,9 +1,9 @@
 import { notFound } from 'next/navigation';
 import { getMatchById, getMatches } from '@/lib/supabase';
-import VideoPlayer from '@/components/video-player';
 import AdBanner from '@/components/ad-banner';
 import Link from 'next/link';
 import P2PStatus from '@/components/p2p-status';
+import VideoPlayerWithP2P from '@/components/video-player';
 
 export const revalidate = 10;
 
@@ -94,7 +94,7 @@ export default async function PlayerPage({ params }) {
       <div className="container-custom py-8">
         {canStream ? (
           <>
-            <VideoPlayer match={match} />
+            <VideoPlayerWithP2P match={match} />
             <div className="mt-6">
               <P2PStatus />
             </div>
