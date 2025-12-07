@@ -1,7 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // ⚡ Mencegah error Next.js 16 saat menggunakan kustom Webpack config.
+  // Ini memberitahu Next.js bahwa kita sadar ada Turbopack namun memilih Webpack.
+  turbopack: {}, 
+
   // ⚡ Cloudflare Pages Optimization
-  output: 'standalone', // Optimized untuk Cloudflare Pages
+  output: 'standalone', 
+
   images: {
     unoptimized: true,
     remotePatterns: [
@@ -16,10 +21,7 @@ const nextConfig = {
     ],
   },
 
-  // 🔧 React Compiler (untuk optimasi performa)
-  // reactCompiler: false, // Tidak support di Next.js 15.5
-
-  // 🌐 Environment variables
+  // 🌐 Environment variables (Diteruskan ke sisi client)
   env: {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -29,7 +31,7 @@ const nextConfig = {
     NEXT_PUBLIC_ADMIN_PASSWORD: process.env.NEXT_PUBLIC_ADMIN_PASSWORD || '123',
   },
 
-  // 📝 Webpack config untuk browser polyfills
+  // 📝 Webpack config untuk browser polyfills (Wajib menggunakan Webpack)
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
@@ -77,7 +79,7 @@ const nextConfig = {
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
 
-  // 📱 Experimental features (optional)
+  // 🧪 Fitur Eksperimental
   experimental: {
     optimizePackageImports: ['react', 'react-dom'],
   },
