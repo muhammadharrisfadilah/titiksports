@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "open-next build",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test:p2p": "node ./scripts/test-p2p-utils.js"
