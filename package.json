@@ -4,10 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "pages:build": "npx @cloudflare/next-on-pages",
+
+    "//": "❗ BUILD Cloudflare Pages HARUS pakai next-on-pages",
+    "build": "npx @cloudflare/next-on-pages",
+
+    "//": "🚀 Jalankan di lokal dengan simulasi Pages Worker",
     "pages:dev": "npx wrangler pages dev .vercel/output/static --compatibility-flag=nodejs_compat",
-    "pages:deploy": "npm run pages:build && npx wrangler pages deploy .vercel/output/static"
+
+    "//": "📦 Deploy ke Cloudflare Pages",
+    "pages:deploy": "npm run build && npx wrangler pages deploy .vercel/output/static"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.86.0",
