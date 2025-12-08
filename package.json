@@ -4,14 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-
-    "//": "❗ BUILD Cloudflare Pages HARUS pakai next-on-pages",
-    "build": "npx @cloudflare/next-on-pages",
-
-    "//": "🚀 Jalankan di lokal dengan simulasi Pages Worker",
-    "pages:dev": "npx wrangler pages dev .vercel/output/static --compatibility-flag=nodejs_compat",
-
-    
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "pages:build": "npx @cloudflare/next-on-pages",
+    "test:p2p": "node ./scripts/test-p2p-utils.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.86.0",
