@@ -4,10 +4,13 @@ import AdBanner from '@/components/ad-banner';
 import Link from 'next/link';
 import P2PStatus from '@/components/p2p-status';
 import VideoPlayerWithP2P from '@/components/video-player';
-export const runtime = 'edge';
+
+// ❌ HAPUS BARIS INI - Tidak kompatibel dengan generateStaticParams
+// export const runtime = 'edge';
+
 export const revalidate = 10;
 
-// Generate static params for static export
+// Generate static params untuk static export
 export async function generateStaticParams() {
   try {
     const matches = await getMatches();
