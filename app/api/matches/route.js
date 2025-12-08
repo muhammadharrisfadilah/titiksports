@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
-import { createMatch, getMatches, updateMatch, deleteMatch, getMatchById } from '@/lib/supabase';
+import { createMatch, getMatches, updateMatch, deleteMatch } from '@/lib/supabase';
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
+
+const TOKEN_SECRET = process.env.NEXT_PUBLIC_TOKEN_SECRET || 'teskunci123';
+
 // Utility to sanitize stream URLs
 function sanitizeStreamUrl(url) {
   if (!url) return null;
@@ -19,46 +22,71 @@ function sanitizeStreamUrl(url) {
   }
 }
 
-// Middleware untuk verify admin token
+/**
+ * Verify HMAC token using Web Crypto API
+ */
+async function verifyTokenHMAC(token, secret) {
+  try {
+    const decoded = atob(token);
+    const parts = decoded.split(':');
+    
+    if (parts.length !== 3) return false;
+    
+    const [username, timestamp, signature] = parts;
+    
+    // Generate expected signature
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(secret);
+    
+    const key = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    
+    const expectedSig = await crypto.subtle.sign(
+      'HMAC',
+      key,
+      encoder.encode(`${username}:${timestamp}`)
+    );
+    
+    const expectedHex = Array.from(new Uint8Array(expectedSig))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+    
+    // Constant-time comparison
+    if (signature !== expectedHex) return false;
+    
+    // Check expiry
+    const age = Date.now() - parseInt(timestamp);
+    if (age < 0 || age >= 7200000) return false;
+    
+    return { username };
+  } catch (e) {
+    return false;
+  }
+}
+
+// Middleware to verify admin token
 async function verifyAdmin(request) {
   try {
     const authHeader = request.headers.get('authorization');
     const cookieToken = request.cookies.get('adminToken')?.value;
-
     const token = authHeader?.replace('Bearer ', '') || cookieToken;
 
     if (!token) {
       return { authenticated: false, error: 'No token provided' };
     }
 
-    // Expect token format: base64(username:timestamp) or signed tokens in future
-    let decoded;
-    try {
-      // Buffer may not exist in some runtimes (Edge), but Node supports it.
-      if (typeof Buffer !== 'undefined') {
-        decoded = Buffer.from(token, 'base64').toString('utf-8');
-      } else if (typeof atob === 'function') {
-        decoded = atob(token);
-      } else {
-        return { authenticated: false, error: 'Runtime not supported for token decoding' };
-      }
-    } catch (e) {
-      return { authenticated: false, error: 'Invalid token encoding' };
+    const verified = await verifyTokenHMAC(token, TOKEN_SECRET);
+    
+    if (!verified) {
+      return { authenticated: false, error: 'Invalid token' };
     }
 
-    const parts = decoded.split(':');
-    if (parts.length < 2) return { authenticated: false, error: 'Invalid token format' };
-
-    const username = parts[0];
-    const timestamp = parseInt(parts[1], 10);
-    if (!Number.isFinite(timestamp)) return { authenticated: false, error: 'Invalid token timestamp' };
-
-    const age = Date.now() - timestamp;
-    if (age >= 7200000 || age < -60000) { // 2 hours, allow small clock skew
-      return { authenticated: false, error: 'Token expired' };
-    }
-
-    return { authenticated: true, username };
+    return { authenticated: true, username: verified.username };
   } catch (error) {
     return { authenticated: false, error: 'Invalid token' };
   }
@@ -176,7 +204,6 @@ export async function POST(request) {
 
 /**
  * PUT /api/matches - Update match (Admin only)
- * Expects query param: ?id=<matchId>
  */
 export async function PUT(request) {
   try {
@@ -229,7 +256,6 @@ export async function PUT(request) {
 
 /**
  * DELETE /api/matches - Delete match (Admin only)
- * Expects query param: ?id=<matchId>
  */
 export async function DELETE(request) {
   try {

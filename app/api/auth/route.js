@@ -1,10 +1,38 @@
 import { NextResponse } from 'next/server';
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
+
 // Admin credentials from environment variables
 const ADMIN_USERNAME = process.env.NEXT_PUBLIC_ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || '123';
 const TOKEN_SECRET = process.env.NEXT_PUBLIC_TOKEN_SECRET || 'teskunci123';
+
+/**
+ * Generate HMAC-SHA256 using Web Crypto API (Edge Runtime compatible)
+ */
+async function generateHMAC(data, secret) {
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secret);
+  
+  const key = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    encoder.encode(data)
+  );
+  
+  // Convert to hex
+  return Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
 
 /**
  * POST /api/auth - Login endpoint
@@ -47,16 +75,15 @@ export async function POST(request) {
     }
 
     // Generate token with HMAC-SHA256
-    const crypto = require('crypto');
     const timestamp = Date.now();
     const tokenData = `${username}:${timestamp}`;
     
-    // Generate HMAC-SHA256
-    const hmac = crypto.createHmac('sha256', TOKEN_SECRET);
-    hmac.update(tokenData);
-    const signature = hmac.digest('hex');
+    // Generate HMAC-SHA256 using Web Crypto API
+    const signature = await generateHMAC(tokenData, TOKEN_SECRET);
     
-    const token = Buffer.from(`${tokenData}:${signature}`).toString('base64');
+    // Encode: base64(username:timestamp:signature)
+    const fullTokenData = `${tokenData}:${signature}`;
+    const token = btoa(fullTokenData); // Use btoa instead of Buffer
 
     // Set secure httpOnly cookie
     const response = NextResponse.json({
@@ -87,6 +114,35 @@ export async function POST(request) {
 }
 
 /**
+ * Verify token with HMAC
+ */
+async function verifyTokenHMAC(token, secret) {
+  try {
+    // Decode token
+    const decoded = atob(token);
+    const parts = decoded.split(':');
+    
+    if (parts.length !== 3) return false;
+    
+    const [username, timestamp, signature] = parts;
+    
+    // Verify HMAC
+    const expectedSignature = await generateHMAC(`${username}:${timestamp}`, secret);
+    
+    // Constant-time comparison
+    if (signature !== expectedSignature) return false;
+    
+    // Check expiry
+    const age = Date.now() - parseInt(timestamp);
+    if (age < 0 || age >= 7200000) return false; // 2 hours
+    
+    return { username, timestamp };
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
  * GET /api/auth/verify - Verify token
  */
 export async function GET(request) {
@@ -103,40 +159,21 @@ export async function GET(request) {
       );
     }
 
-    // Decode and verify token with HMAC-SHA256
-    try {
-      const crypto = require('crypto');
-      const decoded = Buffer.from(token, 'base64').toString('utf-8');
-      const [tokenUsername, tokenTimestamp, tokenSignature] = decoded.split(':');
-      
-      if (!tokenUsername || !tokenTimestamp || !tokenSignature) {
-        return NextResponse.json({ authenticated: false }, { status: 401 });
-      }
-
-      // Verify HMAC
-      const expectedHmac = crypto.createHmac('sha256', TOKEN_SECRET);
-      expectedHmac.update(`${tokenUsername}:${tokenTimestamp}`);
-      const expectedSignature = expectedHmac.digest('hex');
-      
-      // Constant-time comparison
-      if (crypto.timingSafeEqual(Buffer.from(tokenSignature), Buffer.from(expectedSignature))) {
-        const age = Date.now() - parseInt(tokenTimestamp);
-        if (age >= 0 && age < 7200000) { // 2 hours, allow no skew
-          return NextResponse.json({
-            authenticated: true,
-            username: tokenUsername,
-            expiresIn: Math.round((7200000 - age) / 1000),
-          });
-        }
-      }
-    } catch (e) {
-      console.warn('Token verification error:', e.message);
+    // Verify token with HMAC
+    const verified = await verifyTokenHMAC(token, TOKEN_SECRET);
+    
+    if (!verified) {
+      return NextResponse.json(
+        { authenticated: false },
+        { status: 401 }
+      );
     }
 
-    return NextResponse.json(
-      { authenticated: false },
-      { status: 401 }
-    );
+    return NextResponse.json({
+      authenticated: true,
+      username: verified.username,
+      expiresIn: Math.round((7200000 - (Date.now() - parseInt(verified.timestamp))) / 1000),
+    });
   } catch (error) {
     console.error('Verify error:', error);
     return NextResponse.json(

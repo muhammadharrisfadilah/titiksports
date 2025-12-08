@@ -1,32 +1,19 @@
 import { notFound } from 'next/navigation';
-import { getMatchById, getMatches } from '@/lib/supabase';
+import { getMatchById } from '@/lib/supabase';
 import AdBanner from '@/components/ad-banner';
 import Link from 'next/link';
 import P2PStatus from '@/components/p2p-status';
 import VideoPlayerWithP2P from '@/components/video-player';
 
-// ❌ HAPUS BARIS INI - Tidak kompatibel dengan generateStaticParams
-// export const runtime = 'edge';
-
+// ✅ WAJIB untuk Cloudflare Pages
+export const runtime = 'edge';
 export const revalidate = 10;
 
-// Generate static params untuk static export
-export async function generateStaticParams() {
-  try {
-    const matches = await getMatches();
-    
-    return matches.map((match) => ({
-      id: match.id.toString(),
-    }));
-  } catch (error) {
-    console.error('Error generating static params:', error);
-    return [];
-  }
-}
+// ❌ HAPUS generateStaticParams (tidak kompatibel dengan edge runtime)
+// Cloudflare Pages akan render on-demand
 
 // Generate metadata - params must be awaited in Next.js 15+
 export async function generateMetadata({ params }) {
-  // Await params before accessing properties
   const resolvedParams = await params;
   const match = await getMatchById(resolvedParams.id);
   
@@ -42,9 +29,8 @@ export async function generateMetadata({ params }) {
   };
 }
 
-// Main page component - params must be awaited
+// Main page component
 export default async function PlayerPage({ params }) {
-  // Await params before accessing properties
   const resolvedParams = await params;
   const match = await getMatchById(resolvedParams.id);
 
@@ -52,7 +38,6 @@ export default async function PlayerPage({ params }) {
     notFound();
   }
 
-  // Check if match is available for streaming
   const canStream = match.status === 'live' || match.status === 'upcoming';
 
   return (
@@ -63,10 +48,7 @@ export default async function PlayerPage({ params }) {
           <Link href="/" className="text-2xl font-bold text-gradient-red">
             ⚽ TitikBola
           </Link>
-          <Link
-            href="/"
-            className="btn btn-ghost text-sm"
-          >
+          <Link href="/" className="btn btn-ghost text-sm">
             ← Kembali
           </Link>
         </div>
