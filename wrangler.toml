@@ -1,8 +1,0 @@
-name = "titiksports"
-compatibility_date = "2024-12-08"
-pages_build_output_dir = ".vercel/output/static"
-
-[build]
-command = "npm run build"
-
-compatibility_flags = ["nodejs_compat"]
