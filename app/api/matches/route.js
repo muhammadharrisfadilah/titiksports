@@ -121,84 +121,40 @@ export async function GET(request) {
  */
 export async function POST(request) {
   try {
-    // Verify admin
     const auth = await verifyAdmin(request);
     if (!auth.authenticated) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
-    console.log('📝 POST /api/matches - body:', { home_team: body.home_team, away_team: body.away_team });
 
-    // Comprehensive validation
-    if (!body.home_team || !body.away_team) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'home_team dan away_team harus diisi',
-        },
-        { status: 400 }
-      );
+    // Validasi required
+    if (!body.home_team || !body.away_team || !body.competition) {
+      return NextResponse.json({
+        success: false,
+        error: 'home_team, away_team, dan competition harus diisi',
+      }, { status: 400 });
     }
 
-    // Sanitize input
-    const sanitizedBody = {
-      home_team: String(body.home_team || '').trim().slice(0, 255),
-      away_team: String(body.away_team || '').trim().slice(0, 255),
-      start_time: body.start_time ? new Date(body.start_time).toISOString() : null,
-      stream_url1: body.stream_url1 ? sanitizeStreamUrl(body.stream_url1) : null,
-      stream_url2: body.stream_url2 ? sanitizeStreamUrl(body.stream_url2) : null,
-      stream_url3: body.stream_url3 ? sanitizeStreamUrl(body.stream_url3) : null,
-      status: ['live', 'upcoming', 'ended'].includes(body.status) ? body.status : 'upcoming',
-    };
-
-    console.log('🔍 Sanitized body:', sanitizedBody);
-
-    // Validate stream URLs format
-    for (const key of ['stream_url1', 'stream_url2', 'stream_url3']) {
-      if (sanitizedBody[key]) {
-        try {
-          new URL(sanitizedBody[key]);
-        } catch (e) {
-          return NextResponse.json(
-            { success: false, error: `Invalid URL format for ${key}` },
-            { status: 400 }
-          );
-        }
-      }
-    }
-
-    console.log('💾 Calling createMatch...');
-    const result = await createMatch(sanitizedBody);
-    console.log('✅ createMatch result:', result);
+    // ✅ SIMPLE: Langsung kirim body seperti PUT
+    // sanitizeMatchData() di lib/supabase.js akan handle sanitization
+    const result = await createMatch(body);
 
     if (!result.success) {
-      return NextResponse.json(
-        { success: false, error: result.error },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: result.error }, { status: 400 });
     }
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: 'Pertandingan berhasil dibuat',
-        data: result.data,
-      },
-      { status: 201 }
-    );
+    return NextResponse.json({
+      success: true,
+      message: 'Pertandingan berhasil dibuat',
+      data: result.data,
+    }, { status: 201 });
   } catch (error) {
-    console.error('❌ POST matches error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message || 'Gagal membuat pertandingan',
-      },
-      { status: 500 }
-    );
+    console.error('POST matches error:', error);
+    return NextResponse.json({
+      success: false,
+      error: error.message || 'Gagal membuat pertandingan',
+    }, { status: 500 });
   }
 }
 
