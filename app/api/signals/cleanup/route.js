@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
 // Helpers: verify admin token - accept either signed token (payload.sig) or legacy base64(username:timestamp)
 async function verifyAdminTokenRaw(token) {
   if (!token) return false;

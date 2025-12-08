@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
 // Admin credentials from environment variables
 const ADMIN_USERNAME = process.env.NEXT_PUBLIC_ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || '123';

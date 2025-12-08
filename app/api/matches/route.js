@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createMatch, getMatches, updateMatch, deleteMatch, getMatchById } from '@/lib/supabase';
-
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
 // Utility to sanitize stream URLs
 function sanitizeStreamUrl(url) {
   if (!url) return null;

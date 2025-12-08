@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import supabaseClient, { supabaseAdmin } from '@/lib/supabase';
-
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
 // Simple signaling API using Supabase `signals` table.
 // POST /api/p2p-signal - create a signal { room_id, from_peer, to_peer?, type, payload }
 // GET /api/p2p-signal?room_id=...&peer=... - fetch signals for a room (optionally only to a specific peer)
