@@ -5,7 +5,6 @@ import Link from 'next/link';
 import P2PStatus from '@/components/p2p-status';
 import VideoPlayerWithP2P from '@/components/video-player';
 export const runtime = 'edge';
-export const dynamic = 'force-dynamic';
 export const revalidate = 10;
 
 // Generate static params for static export
