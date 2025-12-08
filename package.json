@@ -11,8 +11,7 @@
     "//": "🚀 Jalankan di lokal dengan simulasi Pages Worker",
     "pages:dev": "npx wrangler pages dev .vercel/output/static --compatibility-flag=nodejs_compat",
 
-    "//": "📦 Deploy ke Cloudflare Pages",
-    "pages:deploy": "npm run build && npx wrangler pages deploy .vercel/output/static"
+    
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.86.0",
