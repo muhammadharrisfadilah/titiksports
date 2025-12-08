@@ -1,6 +1,11 @@
+/* =========================
+   IMPORT TAILWIND CORE
+========================= */
 @import "tailwindcss";
 
-/* 🎨 Tailwind v4: Definisi tema menggunakan @theme */
+/* =========================
+   THEME VARIABLES (AMAN)
+========================= */
 @theme {
   /* Netflix Colors */
   --color-netflix-red: #e50914;
@@ -9,66 +14,45 @@
   --color-netflix-dark-gray: #1f1f1f;
   --color-netflix-neutral: #2a2a2a;
 
-  /* Animations */
-  --animate-pulse-slow: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  /* Animation tokens */
+  --animate-pulse-slow: pulse-slow 3s cubic-bezier(0.4,0,0.6,1) infinite;
   --animate-fade-in: fadeIn 0.6s ease-out;
   --animate-slide-up: slideUp 0.3s ease-out;
   --animate-slide-down: slideDown 0.3s ease-out;
-
-  /* Keyframes */
-  @keyframes pulse-slow {
-    0%, 100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.7;
-    }
-  }
-
-  @keyframes fadeIn {
-    0% {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    100% {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes slideUp {
-    0% {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    100% {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes slideDown {
-    0% {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-    100% {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes shimmer {
-    0% {
-      background-position: 200% 0;
-    }
-    100% {
-      background-position: -200% 0;
-    }
-  }
 }
 
-/* Base Styles */
+/* =========================
+   KEYFRAMES (DIPISAH—WAJIB)
+========================= */
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDown {
+  0% { opacity: 0; transform: translateY(-10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* =========================
+   BASE STYLES
+========================= */
 @layer base {
   * {
     border-color: rgb(55 65 81); /* gray-700 */
@@ -79,28 +63,23 @@
     color: white;
   }
 
-  /* Custom Scrollbar */
-  ::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: var(--color-netflix-black);
-  }
-
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: var(--color-netflix-black); }
   ::-webkit-scrollbar-thumb {
     background-color: var(--color-netflix-red);
     border-radius: 6px;
   }
-
   ::-webkit-scrollbar-thumb:hover {
     background-color: var(--color-netflix-dark-red);
   }
 }
 
-/* Components Layer */
+/* =========================
+   COMPONENTS
+========================= */
 @layer components {
-  /* Button Styles */
+  /* BUTTON */
   .btn {
     @apply px-6 py-3 rounded-lg font-semibold transition-all duration-200 inline-flex items-center justify-center gap-2;
   }
@@ -110,7 +89,6 @@
     color: white;
     @apply shadow-lg hover:shadow-xl hover:-translate-y-0.5;
   }
-
   .btn-primary:hover {
     background-color: var(--color-netflix-dark-red);
   }
@@ -123,27 +101,21 @@
     @apply bg-transparent hover:bg-white/10 text-white border border-white/20;
   }
 
-  /* Card Styles */
+  /* CARD */
   .card {
     background-color: var(--color-netflix-dark-gray);
     @apply rounded-lg overflow-hidden transition-all duration-300;
   }
-
   .card-hover {
     @apply hover:scale-105 hover:shadow-2xl hover:z-10;
   }
 
-  /* Input Styles */
+  /* INPUT */
   .input {
-    @apply w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all;
+    @apply w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[rgb(229_9_20_/_0.3)];
   }
 
-  .input:focus {
-    border-color: var(--color-netflix-red);
-    --tw-ring-color: rgb(229 9 20 / 0.2);
-  }
-
-  /* Badge Styles */
+  /* BADGES */
   .badge {
     @apply inline-flex items-center gap-1 px-3 py-1 rounded-md text-sm font-semibold;
   }
@@ -162,12 +134,12 @@
     @apply bg-gray-500/20 text-gray-400 border border-gray-500;
   }
 
-  /* Container */
+  /* CONTAINER */
   .container-custom {
     @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
   }
 
-  /* Loading Skeleton */
+  /* SKELETON */
   .skeleton {
     background: linear-gradient(
       to right,
@@ -179,25 +151,28 @@
     animation: shimmer 1.5s infinite;
   }
 
-  /* Video Player Container */
+  /* VIDEO PLAYER */
   .video-container {
     @apply relative w-full aspect-video bg-black rounded-lg overflow-hidden shadow-2xl;
   }
 
-  /* Overlay */
+  /* OVERLAY */
   .overlay {
     @apply absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-10;
   }
 
-  /* Ad Banner Styling */
+  /* ADS */
   .ad-banner {
     @apply max-w-4xl mx-auto my-8 text-center overflow-hidden;
   }
 }
 
-/* Utilities Layer */
+/* =========================
+   UTILITIES
+========================= */
 @layer utilities {
-  /* Text Gradients */
+
+  /* GRADIENT TEXT */
   .text-gradient-red {
     background: linear-gradient(to right, var(--color-netflix-red), rgb(248 113 113));
     -webkit-background-clip: text;
@@ -205,52 +180,22 @@
     color: transparent;
   }
 
-  /* Animations */
-  .animate-fadeIn {
-    animation: var(--animate-fade-in);
-  }
+  /* ANIMATION UTILITIES */
+  .animate-fadeIn { animation: var(--animate-fade-in); }
+  .animate-slideUp { animation: var(--animate-slide-up); }
+  .animate-slideDown { animation: var(--animate-slide-down); }
 
-  .animate-slideUp {
-    animation: var(--animate-slide-up);
-  }
+  /* SCROLLBAR HIDE */
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
 
-  .animate-slideDown {
-    animation: var(--animate-slide-down);
-  }
+  /* CUSTOM BACKGROUNDS */
+  .bg-netflix-black { background-color: var(--color-netflix-black); }
+  .bg-netflix-dark-gray { background-color: var(--color-netflix-dark-gray); }
+  .bg-netflix-red { background-color: var(--color-netflix-red); }
+  .bg-netflix-dark-red { background-color: var(--color-netflix-dark-red); }
+  .bg-netflix-neutral { background-color: var(--color-netflix-neutral); }
 
-  /* Hide scrollbar but keep functionality */
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-
-  /* Custom background colors */
-  .bg-netflix-black {
-    background-color: var(--color-netflix-black);
-  }
-
-  .bg-netflix-dark-gray {
-    background-color: var(--color-netflix-dark-gray);
-  }
-
-  .bg-netflix-red {
-    background-color: var(--color-netflix-red);
-  }
-
-  .bg-netflix-dark-red {
-    background-color: var(--color-netflix-dark-red);
-  }
-
-  .bg-netflix-neutral {
-    background-color: var(--color-netflix-neutral);
-  }
-
-  /* Custom text colors */
-  .text-netflix-red {
-    color: var(--color-netflix-red);
-  }
+  /* CUSTOM TEXT COLORS */
+  .text-netflix-red { color: var(--color-netflix-red); }
 }

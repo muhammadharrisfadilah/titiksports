@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --webpack",
+    "dev": "next dev",
     "build": "next build && node ./scripts/generate-worker.js",
     "pages:build": "npx @cloudflare/next-on-pages",
     "pages:dev": "npx wrangler pages dev .vercel/output/static --compatibility-flag=nodejs_compat",
@@ -14,9 +14,9 @@
     "clsx": "^2.1.1",
     "dashjs": "^5.1.0",
     "hls.js": "^1.6.15",
-    "next": "^16.0.7",
-    "react": "^19.2.1",
-    "react-dom": "^19.2.1",
+    "next": "15.5.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
@@ -24,7 +24,7 @@
     "@tailwindcss/postcss": "^4.1.17",
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
-    "eslint-config-next": "^16.0.7",
+    "eslint-config-next": "15.5.2",
     "tailwindcss": "^4.1.17",
     "wrangler": "^4.53.0"
   }
