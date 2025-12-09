@@ -359,7 +359,7 @@ export default function VideoPlayerWithP2P({ match }) {
       type,
       details,
       fatal,
-      status: response?.code,
+      status: response?.code || 'N/A',
     });
 
     // Handle 403 specifically
