@@ -1,49 +1,47 @@
 "use client";
 
 /**
- * 🎬 Video Player with P2P Support - FIXED v2
+ * 🎬 Video Player - SUPER OPTIMIZED FOR SMOOTH PLAYBACK
  * 
  * FIXES:
- * ✅ Token auto-refresh before expiry
- * ✅ Proper 403 error handling
- * ✅ P2P engine room management
- * ✅ Better HLS config with P2P loader
- * ✅ Improved error recovery
+ * ✅ Token refresh hanya saat benar-benar perlu
+ * ✅ Buffer stall handling yang SANGAT toleran
+ * ✅ Link switch hanya sebagai last resort
+ * ✅ Stats polling dengan requestAnimationFrame (tidak blocking)
+ * ✅ Proper cleanup dan memory management
  */
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import Hls from "hls.js";
-import { getP2PEngine, resetP2PEngine } from "@/lib/p2p-engine";
+import { getP2PEngine } from "@/lib/p2p-engine";
 import P2PLoader from "@/lib/hls-p2p-loader";
-import { createSecureStreamUrl, refreshToken, clearTokenCache } from "@/lib/token-manager";
-import { getPerformanceMonitor } from "@/lib/performance-monitor";
+import { createSecureStreamUrl, shouldRefreshToken, getTokenInfo } from "@/lib/token-manager";
 import { getOptimizedHLSConfig, STREAMING_CONSTANTS } from "@/lib/streaming-constants";
 import { cn } from "@/lib/utils";
 
 const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL;
 const ENABLE_P2P = process.env.NEXT_PUBLIC_ENABLE_P2P !== "false";
 
-// Validate environment
-if (typeof window !== "undefined" && !WORKER_URL) {
-  console.error("❌ NEXT_PUBLIC_WORKER_URL not configured!");
-}
-
 export default function VideoPlayerWithP2P({ match }) {
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const p2pEngineRef = useRef(null);
-  const monitorRef = useRef(null);
+  
+  // ✅ FIX: Token refresh timer dengan interval yang benar
   const tokenRefreshIntervalRef = useRef(null);
-  const initAttemptRef = useRef(0);
-  const currentTokenRef = useRef(null);
+  const statsAnimationFrameRef = useRef(null);
+  
+  // ✅ FIX: Error tracking per link
+  const errorCountRef = useRef({});
+  const lastErrorTimeRef = useRef(0);
+  const consecutiveStallsRef = useRef(0);
+  const isRecoveringRef = useRef(false);
 
   const [currentLink, setCurrentLink] = useState("link1");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showStats, setShowStats] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
   const [failedLinks, setFailedLinks] = useState(new Set());
-  const [isRetrying, setIsRetrying] = useState(false);
   const [streamState, setStreamState] = useState('INITIALIZING');
 
   const [stats, setStats] = useState({
@@ -56,173 +54,65 @@ export default function VideoPlayerWithP2P({ match }) {
     p2pHits: 0,
     offloadRatio: "0%",
     bytesFromPeers: "0 MB",
-    bytesShared: "0 MB",
-    savings: "$0.00",
+    tokenAge: "0min",
   });
 
-  // Available links
   const availableLinks = [
     { id: "link1", url: match.stream_url1, ref: match.referer1, org: match.origin1, enabled: !!match.stream_url1 },
     { id: "link2", url: match.stream_url2, ref: match.referer2, org: match.origin2, enabled: !!match.stream_url2 },
     { id: "link3", url: match.stream_url3, ref: match.referer3, org: match.origin3, enabled: !!match.stream_url3 },
   ].filter((link) => link.enabled);
 
-  // ========== TOKEN REFRESH ==========
+  // ========== ✅ FIX: TOKEN REFRESH (HANYA SAAT PERLU) ==========
   
   const setupTokenRefresh = useCallback(() => {
-    // Clear existing interval
     if (tokenRefreshIntervalRef.current) {
       clearInterval(tokenRefreshIntervalRef.current);
     }
 
-    // Refresh token periodically (25 minutes, 5 min before 30 min expiry)
+    // ✅ Check token setiap 1 menit, tapi hanya refresh jika perlu
     tokenRefreshIntervalRef.current = setInterval(async () => {
-      console.log('🔄 Refreshing token...');
+      const needRefresh = shouldRefreshToken(match.id, currentLink);
       
-      try {
-        const newToken = await refreshToken(match.id, currentLink);
-        currentTokenRef.current = newToken;
-        console.log('✅ Token refreshed');
-      } catch (err) {
-        console.error('❌ Token refresh failed:', err);
-        // Token refresh failed - might need to reload
-        handleTokenExpired();
+      if (needRefresh) {
+        const tokenInfo = getTokenInfo(match.id, currentLink);
+        console.log('🔄 Token refresh needed:', {
+          isExpired: tokenInfo?.isExpired,
+          remainingMin: tokenInfo?.remainingMinutes || 0,
+        });
+        
+        // ✅ Refresh WITHOUT reloading player
+        await refreshTokenSilently();
       }
-    }, STREAMING_CONSTANTS.TOKEN_REFRESH_INTERVAL);
+    }, 60000); // Check setiap 1 menit
 
-    console.log('⏰ Token refresh scheduled every', 
-      STREAMING_CONSTANTS.TOKEN_REFRESH_INTERVAL / 60000, 'minutes');
+    console.log('⏰ Token refresh scheduler started');
   }, [match.id, currentLink]);
 
-  const handleTokenExpired = useCallback(() => {
-    console.warn('🔑 Token expired, reinitializing...');
-    
-    // Clear token cache
-    clearTokenCache(match.id, currentLink);
-    
-    // Reinitialize player with new token
-    setRetryCount(prev => prev + 1);
-    initAttemptRef.current = 0;
-    
-    // Small delay to ensure token is regenerated
-    setTimeout(() => {
-      initPlayer();
-    }, 1000);
-  }, [match.id, currentLink]);
-
-  // ========== INITIALIZATION ==========
-
-  const initPlayer = useCallback(async () => {
-    // Check if link already failed
-    if (failedLinks.has(currentLink)) {
-      console.warn(`⚠️ Link ${currentLink} already failed, finding alternative`);
-      const nextLink = findNextAvailableLink();
-      if (nextLink) {
-        setCurrentLink(nextLink.id);
-      } else {
-        setError("All streams unavailable");
-        setLoading(false);
-      }
-      return;
-    }
-
-    // Prevent rapid retries
-    if (isRetrying) {
-      console.log("⏳ Init blocked - already retrying");
-      return;
-    }
-
-    // Check global retry limit
-    if (retryCount >= 5) {
-      setError("Stream failed after multiple retries. Please refresh the page.");
-      setLoading(false);
-      return;
-    }
-
-    initAttemptRef.current += 1;
-    const attemptId = initAttemptRef.current;
-    console.log(`🔄 Init attempt #${attemptId} for ${currentLink}`);
-
-    setIsRetrying(true);
-    setLoading(true);
-    setError(null);
-    setStreamState('INITIALIZING');
-
+  const refreshTokenSilently = async () => {
     try {
-      // Initialize performance monitor
-      if (!monitorRef.current) {
-        monitorRef.current = getPerformanceMonitor();
-        monitorRef.current.markInitStart();
-      }
-
-      // Initialize P2P engine
-      await initP2PEngine();
-
-      // Get current link config
-      const linkConfig = availableLinks.find(l => l.id === currentLink);
-      if (!linkConfig) {
-        throw new Error(`Link ${currentLink} not configured`);
-      }
-
-      // Create secure manifest URL with fresh token
-      const manifestUrl = await createSecureStreamUrl(
+      const newUrl = await createSecureStreamUrl(
         `${WORKER_URL}/api/stream/manifest`,
         match.id,
         currentLink
       );
-
-      console.log('📡 Manifest URL:', manifestUrl);
-
-      // Initialize HLS
-      await initHls(manifestUrl);
-
-      // Setup token refresh
-      setupTokenRefresh();
-
-      setStreamState('READY');
-
-    } catch (err) {
-      console.error(`❌ Init error (attempt #${attemptId}):`, err);
       
-      // Check if it's a token error
-      if (err.message?.includes('403') || err.message?.includes('Token')) {
-        handleTokenExpired();
-        return;
+      // ✅ Update HLS source TANPA reload player
+      if (hlsRef.current && newUrl) {
+        hlsRef.current.loadSource(newUrl);
+        console.log('✅ Token refreshed silently (no player reload)');
       }
-
-      setError(err.message || "Failed to initialize player");
-      setLoading(false);
-      setStreamState('ERROR');
-
-      // Mark this link as failed
-      setFailedLinks((prev) => new Set([...prev, currentLink]));
-
-      // Try next link
-      const nextLink = findNextAvailableLink();
-      if (nextLink) {
-        console.log(`🔄 Will try ${nextLink.id} in 2s...`);
-        setTimeout(() => {
-          setCurrentLink(nextLink.id);
-        }, 2000);
-      }
-    } finally {
-      setIsRetrying(false);
+    } catch (err) {
+      console.error('❌ Silent token refresh failed:', err);
     }
-  }, [currentLink, match.id, retryCount, failedLinks, isRetrying, availableLinks, setupTokenRefresh, handleTokenExpired]);
+  };
+
+  // ========== INITIALIZATION ==========
 
   const initP2PEngine = async () => {
     if (!ENABLE_P2P) return;
 
     try {
-      // Reset P2P engine if room changed
-      const currentP2P = p2pEngineRef.current;
-      if (currentP2P && currentP2P.roomId !== `match_${match.id}`) {
-        console.log('🔄 P2P room changed, resetting...');
-        await currentP2P.destroy();
-        p2pEngineRef.current = null;
-      }
-
-      // Initialize new P2P engine
       if (!p2pEngineRef.current) {
         const p2pEngine = getP2PEngine();
         const initialized = await p2pEngine.init(`match_${match.id}`, {
@@ -232,13 +122,10 @@ export default function VideoPlayerWithP2P({ match }) {
         if (initialized) {
           p2pEngineRef.current = p2pEngine;
           console.log("✅ P2P Engine ready");
-        } else {
-          console.warn("⚠️ P2P init failed, using CDN only");
         }
       }
     } catch (err) {
-      console.error('P2P init error:', err);
-      // Continue without P2P
+      console.warn('⚠️ P2P init failed:', err.message);
     }
   };
 
@@ -253,90 +140,68 @@ export default function VideoPlayerWithP2P({ match }) {
     }
 
     if (Hls.isSupported()) {
-      // Get optimized config based on device/connection
-      const baseConfig = getOptimizedHLSConfig();
-
       const hlsConfig = {
-        ...baseConfig,
-        
-        // Use P2P Loader if available
+        ...getOptimizedHLSConfig(),
         loader: P2PLoader,
-        
-        // XHR setup for custom headers (if needed)
-        xhrSetup: (xhr, url) => {
-          // Add any custom headers here if needed
-        },
       };
 
       const hls = new Hls(hlsConfig);
       hlsRef.current = hls;
 
-      // Load source
       hls.loadSource(manifestUrl);
       hls.attachMedia(video);
 
-      // Event handlers
+      // ========== HLS EVENT HANDLERS ==========
+
       hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
         console.log("✅ Manifest loaded:", {
           levels: data.levels?.length || 0,
-          audioTracks: data.audioTracks?.length || 0,
         });
         
-        video.play().catch((e) => console.log("Autoplay prevented:", e.message));
+        video.play().catch((e) => console.log("Autoplay prevented"));
         setLoading(false);
         setStreamState('PLAYING');
-
-        if (monitorRef.current) {
-          monitorRef.current.markInitEnd();
-        }
+        
+        // ✅ Reset error counters on success
+        errorCountRef.current[currentLink] = 0;
+        consecutiveStallsRef.current = 0;
       });
 
-      // First frame
-      video.addEventListener("canplay", () => {
-        if (monitorRef.current) {
-          monitorRef.current.markFirstFrame();
-        }
-      }, { once: true });
-
-      // Quality switch
       hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
         const level = hls.levels[data.level];
         if (level) {
           console.log(`📺 Quality: ${level.height}p`);
-          if (monitorRef.current) {
-            monitorRef.current.recordQualitySwitch(null, level, "auto");
-          }
         }
       });
 
-      // Fragment loaded
-      hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
-        // Track fragment loads for debugging
-        if (data.frag && data.stats) {
-          const loadTime = data.stats.loading.end - data.stats.loading.start;
-          if (loadTime > 3000) {
-            console.warn(`⚠️ Slow fragment load: ${loadTime}ms`);
-          }
-        }
-      });
-
-      // Error handling
+      // ========== ✅ FIX: ERROR HANDLING (SUPER TOLERAN) ==========
+      
       hls.on(Hls.Events.ERROR, (event, data) => {
         handleHlsError(data);
       });
 
-      // Buffer stall detection
+      // ========== ✅ FIX: BUFFER STALL HANDLING ==========
+      
       video.addEventListener('waiting', () => {
         if (streamState === 'PLAYING') {
+          consecutiveStallsRef.current++;
+          console.log(`⏳ Buffer stall #${consecutiveStallsRef.current}`);
           setStreamState('BUFFERING');
-          console.log('⏳ Buffering...');
         }
       });
 
       video.addEventListener('playing', () => {
         if (streamState === 'BUFFERING') {
+          console.log('▶️ Playback resumed');
+          consecutiveStallsRef.current = 0; // ✅ Reset on successful play
           setStreamState('PLAYING');
-          console.log('▶️ Playing');
+        }
+      });
+
+      // ✅ Canplay = ada data, siap play
+      video.addEventListener('canplay', () => {
+        if (streamState === 'BUFFERING' || streamState === 'INITIALIZING') {
+          setStreamState('READY');
         }
       });
 
@@ -352,8 +217,17 @@ export default function VideoPlayerWithP2P({ match }) {
     }
   };
 
+  // ========== ✅ FIX: ERROR HANDLER (SANGAT KONSERVATIF) ==========
+  
   const handleHlsError = (data) => {
     const { type, details, fatal, response } = data;
+    const now = Date.now();
+    
+    // ✅ Cooldown untuk prevent spam
+    if (now - lastErrorTimeRef.current < STREAMING_CONSTANTS.ERROR_COOLDOWN) {
+      return;
+    }
+    lastErrorTimeRef.current = now;
     
     console.error("🔴 HLS Error:", {
       type,
@@ -362,60 +236,127 @@ export default function VideoPlayerWithP2P({ match }) {
       status: response?.code,
     });
 
-    // Handle 403 specifically
+    // ✅ Track errors per link
+    if (!errorCountRef.current[currentLink]) {
+      errorCountRef.current[currentLink] = 0;
+    }
+    errorCountRef.current[currentLink]++;
+
+    // ========== TOKEN EXPIRED (403) ==========
     if (response?.code === 403) {
-      console.warn("🔑 403 Forbidden - likely token expired");
+      console.warn("🔑 403 Forbidden - refreshing token...");
       
-      if (!fatal) {
-        // Non-fatal 403 - might recover automatically
-        console.log("⏳ Waiting for auto-recovery...");
+      if (fatal) {
+        refreshTokenSilently();
+      }
+      return;
+    }
+
+    // ========== BUFFER STALL ==========
+    if (details === Hls.ErrorDetails.BUFFER_STALLED_ERROR || 
+        details === Hls.ErrorDetails.BUFFER_NUDGE_ON_STALL) {
+      
+      if (isRecoveringRef.current) return;
+      
+      consecutiveStallsRef.current++;
+      console.warn(`⏸️ Buffer stall #${consecutiveStallsRef.current}/${STREAMING_CONSTANTS.MAX_STALL_RETRIES}`);
+      
+      // ✅ SUPER toleran - hanya switch setelah 20 stalls
+      if (consecutiveStallsRef.current >= STREAMING_CONSTANTS.MAX_STALL_RETRIES) {
+        console.error('❌ Too many stalls, switching link');
+        handleFatalError();
+      } else {
+        // ✅ Recovery: nudge playback
+        isRecoveringRef.current = true;
+        
+        setTimeout(() => {
+          const video = videoRef.current;
+          if (video && hlsRef.current) {
+            // Try to resume
+            if (video.paused) {
+              video.play().catch(() => {});
+            }
+            
+            // Nudge forward slightly
+            try {
+              video.currentTime += 0.1;
+            } catch (e) {}
+          }
+          
+          setTimeout(() => {
+            isRecoveringRef.current = false;
+          }, 1000);
+        }, 500);
+      }
+      return;
+    }
+
+    // ========== NON-FATAL ERRORS ==========
+    if (!fatal) {
+      console.warn("⚠️ Non-fatal error, auto-recovery...");
+      return;
+    }
+
+    // ========== FATAL NETWORK ERROR ==========
+    if (type === Hls.ErrorTypes.NETWORK_ERROR) {
+      const errorCount = errorCountRef.current[currentLink] || 0;
+      
+      // ✅ Retry banyak kali sebelum switch
+      if (errorCount < STREAMING_CONSTANTS.RECOVERY_CONFIG.ERRORS_BEFORE_SWITCH) {
+        console.log(`🔄 Network error, retry ${errorCount}/${STREAMING_CONSTANTS.RECOVERY_CONFIG.ERRORS_BEFORE_SWITCH}`);
+        
+        setTimeout(() => {
+          if (hlsRef.current) {
+            hlsRef.current.startLoad();
+          }
+        }, 2000);
         return;
       }
       
-      // Fatal 403 - need token refresh
-      handleTokenExpired();
+      console.error('❌ Network error - max retries, switching link');
+      handleFatalError();
       return;
     }
 
-    // Non-fatal errors
-    if (!fatal) {
-      console.warn("⚠️ Non-fatal HLS error, player will auto-recover");
-      return;
+    // ========== FATAL MEDIA ERROR ==========
+    if (type === Hls.ErrorTypes.MEDIA_ERROR) {
+      console.warn('🎥 Media error, attempting recovery...');
+      try {
+        if (hlsRef.current) {
+          hlsRef.current.recoverMediaError();
+          errorCountRef.current[currentLink] = 0;
+        }
+        return;
+      } catch (e) {
+        console.error('Media recovery failed');
+      }
     }
 
-    // Fatal errors
-    handleFatalError(data);
+    // ========== OTHER FATAL ERRORS ==========
+    handleFatalError();
   };
 
-  const handleFatalError = (data) => {
-    console.error("💥 Fatal HLS error:", data.type, data.details);
-
-    if (isRetrying) {
-      console.warn("⏳ Already handling error, skipping");
-      return;
-    }
+  const handleFatalError = () => {
+    console.error("💥 Fatal error, switching link...");
 
     setStreamState('ERROR');
-
-    // Mark current link as failed
     setFailedLinks((prev) => new Set([...prev, currentLink]));
 
-    // Find next available link
     const nextLink = findNextAvailableLink();
 
     if (!nextLink) {
-      setError("All available streams have failed. Please try again later.");
+      setError("All streams unavailable. Please try again later.");
       setLoading(false);
       return;
     }
 
     console.log(`🔄 Switching: ${currentLink} → ${nextLink.id}`);
 
-    // Delay before switch
     setTimeout(() => {
-      setRetryCount((prev) => prev + 1);
+      errorCountRef.current = {}; // Reset all errors
+      consecutiveStallsRef.current = 0;
       setCurrentLink(nextLink.id);
-    }, 2000);
+    }, 3000); // ✅ Delay sebelum switch
   };
 
   const findNextAvailableLink = () => {
@@ -424,25 +365,137 @@ export default function VideoPlayerWithP2P({ match }) {
     );
   };
 
+  // ========== MAIN INIT ==========
+
+  const initPlayer = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setStreamState('INITIALIZING');
+
+    try {
+      await initP2PEngine();
+
+      const manifestUrl = await createSecureStreamUrl(
+        `${WORKER_URL}/api/stream/manifest`,
+        match.id,
+        currentLink
+      );
+
+      await initHls(manifestUrl);
+
+      setupTokenRefresh();
+
+      setStreamState('READY');
+
+    } catch (err) {
+      console.error(`❌ Init error:`, err);
+      setError(err.message || "Failed to initialize player");
+      setLoading(false);
+      setStreamState('ERROR');
+    }
+  }, [currentLink, match.id, setupTokenRefresh]);
+
+  // ========== ✅ FIX: STATS UPDATE (NON-BLOCKING) ==========
+
+  useEffect(() => {
+    if (!showStats) return;
+
+    const video = videoRef.current;
+    if (!video) return;
+
+    let lastUpdate = 0;
+    const updateInterval = 2000; // Update every 2s
+
+    const updateStats = () => {
+      const now = performance.now();
+      
+      // Throttle updates
+      if (now - lastUpdate < updateInterval) {
+        statsAnimationFrameRef.current = requestAnimationFrame(updateStats);
+        return;
+      }
+      lastUpdate = now;
+
+      // Video stats
+      const buffered = video.buffered.length > 0
+        ? `${(video.buffered.end(video.buffered.length - 1) - video.currentTime).toFixed(1)}s`
+        : "0s";
+
+      let quality = "Auto";
+      if (hlsRef.current?.levels && hlsRef.current.currentLevel >= 0) {
+        const level = hlsRef.current.levels[hlsRef.current.currentLevel];
+        quality = level ? `${level.height}p` : "Auto";
+      }
+
+      const droppedFrames = video.getVideoPlaybackQuality?.()?.droppedVideoFrames || 0;
+
+      // P2P stats (non-blocking)
+      let p2pStats = {
+        p2pEnabled: ENABLE_P2P,
+        peers: 0,
+        healthyPeers: 0,
+        p2pHits: 0,
+        offloadRatio: "0%",
+        bytesFromPeers: "0 MB",
+      };
+
+      if (p2pEngineRef.current && ENABLE_P2P) {
+        try {
+          const engineStats = p2pEngineRef.current.getStats();
+          p2pStats = {
+            p2pEnabled: true,
+            peers: engineStats.peers || 0,
+            healthyPeers: engineStats.healthyPeers || 0,
+            p2pHits: engineStats.p2pHits || 0,
+            offloadRatio: engineStats.offloadRatio || "0%",
+            bytesFromPeers: engineStats.bytesFromPeers || "0 MB",
+          };
+        } catch (e) {}
+      }
+
+      // Token info
+      const tokenInfo = getTokenInfo(match.id, currentLink);
+      const tokenAge = tokenInfo ? `${tokenInfo.remainingMinutes}min` : "0min";
+
+      setStats({
+        buffered,
+        quality,
+        droppedFrames,
+        tokenAge,
+        ...p2pStats,
+      });
+
+      statsAnimationFrameRef.current = requestAnimationFrame(updateStats);
+    };
+
+    statsAnimationFrameRef.current = requestAnimationFrame(updateStats);
+
+    return () => {
+      if (statsAnimationFrameRef.current) {
+        cancelAnimationFrame(statsAnimationFrameRef.current);
+      }
+    };
+  }, [showStats, match.id, currentLink]);
+
   // ========== CLEANUP ==========
 
   const cleanup = useCallback(() => {
     console.log("🧹 Cleanup initiated");
 
-    // Stop token refresh
     if (tokenRefreshIntervalRef.current) {
       clearInterval(tokenRefreshIntervalRef.current);
       tokenRefreshIntervalRef.current = null;
     }
 
-    // Destroy HLS
+    if (statsAnimationFrameRef.current) {
+      cancelAnimationFrame(statsAnimationFrameRef.current);
+    }
+
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
-      console.log("✅ HLS destroyed");
     }
 
-    // Cleanup video
     if (videoRef.current) {
       videoRef.current.pause();
       videoRef.current.removeAttribute("src");
@@ -453,115 +506,22 @@ export default function VideoPlayerWithP2P({ match }) {
   // ========== EFFECTS ==========
 
   useEffect(() => {
-    if (isRetrying) return;
-
     initPlayer();
 
-    const handleUnload = () => {
-      if (p2pEngineRef.current) {
-        console.log("🧹 Page unload - destroying P2P");
-        p2pEngineRef.current.destroy();
-      }
-    };
-
-    window.addEventListener("beforeunload", handleUnload);
-
     return () => {
-      window.removeEventListener("beforeunload", handleUnload);
       cleanup();
     };
   }, [currentLink, match.id]);
-
-  // Reset when match changes
-  useEffect(() => {
-    console.log('📺 Match changed:', match.id);
-    setRetryCount(0);
-    setFailedLinks(new Set());
-    setError(null);
-    setCurrentLink('link1');
-    
-    // Reset P2P for new room
-    if (p2pEngineRef.current) {
-      resetP2PEngine();
-      p2pEngineRef.current = null;
-    }
-  }, [match.id]);
-
-  // ========== STATS UPDATE ==========
-
-  useEffect(() => {
-    if (!showStats) return;
-
-    const video = videoRef.current;
-    if (!video) return;
-
-    const interval = setInterval(() => {
-      if (video.paused && streamState !== 'BUFFERING') return;
-
-      const hls = hlsRef.current;
-      const p2p = p2pEngineRef.current;
-
-      // Video stats
-      const buffered = video.buffered.length > 0
-        ? `${(video.buffered.end(video.buffered.length - 1) - video.currentTime).toFixed(1)}s`
-        : "0s";
-
-      let quality = "Auto";
-      if (hls?.levels && hls.currentLevel >= 0) {
-        const level = hls.levels[hls.currentLevel];
-        quality = level ? `${level.height}p` : "Auto";
-      }
-
-      const droppedFrames = video.getVideoPlaybackQuality?.()?.droppedVideoFrames || 0;
-
-      // P2P stats
-      let p2pStats = {
-        p2pEnabled: ENABLE_P2P,
-        peers: 0,
-        healthyPeers: 0,
-        p2pHits: 0,
-        offloadRatio: "0%",
-        bytesFromPeers: "0 MB",
-        bytesShared: "0 MB",
-        savings: "$0.00",
-      };
-
-      if (p2p && ENABLE_P2P) {
-        const engineStats = p2p.getStats();
-        const bytesFromPeers = parseFloat(engineStats.bytesFromPeers) || 0;
-        p2pStats = {
-          p2pEnabled: true,
-          peers: engineStats.peers || 0,
-          healthyPeers: engineStats.healthyPeers || 0,
-          p2pHits: engineStats.p2pHits || 0,
-          offloadRatio: engineStats.offloadRatio || "0%",
-          bytesFromPeers: engineStats.bytesFromPeers || "0 MB",
-          bytesShared: engineStats.bytesShared || "0 MB",
-          savings: `$${(bytesFromPeers * 0.1).toFixed(2)}`,
-        };
-      }
-
-      setStats({
-        buffered,
-        quality,
-        droppedFrames,
-        ...p2pStats,
-      });
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [showStats, streamState]);
 
   // ========== MANUAL LINK SWITCH ==========
 
   const handleLinkSwitch = (linkId) => {
     console.log(`🔄 Manual switch to ${linkId}`);
     
-    // Reset all states for manual switch
-    setRetryCount(0);
+    errorCountRef.current = {};
+    consecutiveStallsRef.current = 0;
     setFailedLinks(new Set());
     setError(null);
-    clearTokenCache(match.id, linkId);
     setCurrentLink(linkId);
   };
 
@@ -589,11 +549,6 @@ export default function VideoPlayerWithP2P({ match }) {
                 🔗 Connecting to peers...
               </p>
             )}
-            {retryCount > 0 && (
-              <p className="mt-1 text-xs text-yellow-400">
-                Retry attempt {retryCount}
-              </p>
-            )}
           </div>
         )}
 
@@ -605,9 +560,8 @@ export default function VideoPlayerWithP2P({ match }) {
             <button
               onClick={() => {
                 setError(null);
-                setRetryCount(0);
+                errorCountRef.current = {};
                 setFailedLinks(new Set());
-                clearTokenCache(match.id, currentLink);
                 initPlayer();
               }}
               className="mt-4 px-6 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white font-semibold transition"
@@ -665,6 +619,10 @@ export default function VideoPlayerWithP2P({ match }) {
                 <span className="text-gray-400">State:</span>
                 <span className="font-mono">{streamState}</span>
               </div>
+              <div className="flex justify-between text-xs text-white">
+                <span className="text-gray-400">Token:</span>
+                <span className="font-mono">{stats.tokenAge}</span>
+              </div>
             </div>
 
             {/* P2P Stats */}
@@ -685,14 +643,6 @@ export default function VideoPlayerWithP2P({ match }) {
                   <span className="text-gray-400">From Peers:</span>
                   <span className="font-mono">{stats.bytesFromPeers}</span>
                 </div>
-                <div className="flex justify-between text-xs text-white">
-                  <span className="text-gray-400">Shared:</span>
-                  <span className="font-mono">{stats.bytesShared}</span>
-                </div>
-                <div className="flex justify-between text-xs pt-2 border-t border-green-500/30">
-                  <span className="text-gray-400">💰 Saved:</span>
-                  <span className="font-mono text-green-400 font-bold">{stats.savings}</span>
-                </div>
               </div>
             )}
           </div>
@@ -708,7 +658,7 @@ export default function VideoPlayerWithP2P({ match }) {
               <button
                 key={link.id}
                 onClick={() => handleLinkSwitch(link.id)}
-                disabled={loading || isRetrying}
+                disabled={loading}
                 className={cn(
                   "px-4 py-2 rounded-lg font-semibold transition-all",
                   currentLink === link.id
@@ -716,7 +666,7 @@ export default function VideoPlayerWithP2P({ match }) {
                     : failedLinks.has(link.id)
                     ? "bg-red-900/50 text-red-300 cursor-not-allowed"
                     : "bg-gray-700 hover:bg-gray-600 text-white",
-                  (loading || isRetrying) && "opacity-50 cursor-not-allowed"
+                  loading && "opacity-50 cursor-not-allowed"
                 )}
               >
                 Link {link.id.slice(-1)}
@@ -748,25 +698,6 @@ export default function VideoPlayerWithP2P({ match }) {
           </div>
         </div>
       </div>
-
-      {/* P2P Info Banner */}
-      {ENABLE_P2P && !loading && stats.peers > 0 && (
-        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">💚</span>
-            <div>
-              <div className="font-semibold text-green-400">
-                P2P Active - Reducing Server Load
-              </div>
-              <div className="text-xs text-gray-400">
-                Connected to {stats.peers} peer{stats.peers !== 1 ? 's' : ''} • 
-                Offload: {stats.offloadRatio} • 
-                Saved: {stats.savings}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
