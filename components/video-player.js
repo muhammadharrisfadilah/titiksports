@@ -749,7 +749,7 @@ export default function VideoPlayerWithP2P({ match }) {
         </div>
       </div>
 
-      {/* P2P Info Banner */}
+      {/* P2P Info Bannersss */}
       {ENABLE_P2P && !loading && stats.peers > 0 && (
         <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-sm">
           <div className="flex items-center gap-2">
