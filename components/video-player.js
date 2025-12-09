@@ -48,7 +48,6 @@ export default function VideoPlayerWithP2P({ match }) {
 
   const [currentLink, setCurrentLink] = useState("link1");
   const [loading, setLoading] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
 
   // Mobile detection
   useEffect(() => {
@@ -264,6 +263,12 @@ export default function VideoPlayerWithP2P({ match }) {
   const initHls = async (manifestUrl) => {
     const video = videoRef.current;
     if (!video) throw new Error('Video element not ready');
+
+    // Update mobile detection before HLS config
+    const isMobileDevice = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
+    setIsMobile(isMobileDevice);
 
     // Cleanup existing HLS
     if (hlsRef.current) {
