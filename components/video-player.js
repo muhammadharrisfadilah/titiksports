@@ -29,9 +29,18 @@ if (typeof window !== "undefined" && !WORKER_URL) {
 }
 
 export default function VideoPlayerWithP2P({ match }) {
+  const [isMobile, setIsMobile] = useState(false);
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const p2pEngineRef = useRef(null);
+
+  // Detect mobile on mount
+  useEffect(() => {
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
+    setIsMobile(isMobile);
+  }, []);
   const monitorRef = useRef(null);
   const tokenRefreshIntervalRef = useRef(null);
   const initAttemptRef = useRef(0);
@@ -39,6 +48,16 @@ export default function VideoPlayerWithP2P({ match }) {
 
   const [currentLink, setCurrentLink] = useState("link1");
   const [loading, setLoading] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Mobile detection
+  useEffect(() => {
+    const isMobileDevice = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
+    setIsMobile(isMobileDevice);
+    console.log(`📱 Device detected: ${isMobileDevice ? 'Mobile' : 'Desktop'}`);
+  }, []);
   const [error, setError] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -253,8 +272,8 @@ export default function VideoPlayerWithP2P({ match }) {
     }
 
     if (Hls.isSupported()) {
-      // Get optimized config based on device/connection
-      const baseConfig = getOptimizedHLSConfig();
+      // Get optimized config based on device type
+      const baseConfig = getOptimizedHLSConfig(isMobile);
 
       const hlsConfig = {
         ...baseConfig,
